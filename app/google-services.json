@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "852553986504",
+    "project_id": "mybaby-48e4d",
+    "storage_bucket": "mybaby-48e4d.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:852553986504:android:0afc56fa9225f01087d0fd",
+        "android_client_info": {
+          "package_name": "inc.pneuma.mybaby"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD12cpjEfigJlF-ey8B4StiojTDJ4q_Y70"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
