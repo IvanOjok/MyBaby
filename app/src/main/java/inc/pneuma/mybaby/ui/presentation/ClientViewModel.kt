@@ -3,9 +3,8 @@ package inc.pneuma.mybaby.ui.presentation
 import android.app.Activity
 import android.content.ContentValues
 import android.content.ContentValues.TAG
+import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseException
@@ -21,10 +20,13 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import inc.pneuma.mybaby.data.model.User
-import inc.pneuma.mybaby.domain.repository.LoginState
+import inc.pneuma.mybaby.data.model.userDataStore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -33,6 +35,12 @@ class ClientViewModel : ViewModel() {
 
     private var _navigateToLogin = MutableStateFlow(false)
     val navigateToLogin = _navigateToLogin.asStateFlow()
+
+    private var _isUserLoggedIn = MutableStateFlow(false)
+    val isUserLoggedIn = _isUserLoggedIn.asStateFlow()
+
+    private var _loggedInUser = MutableStateFlow("")
+    val loggedInUser = _loggedInUser.asStateFlow()
 
     var storedVerificationId: String? = null
 
@@ -45,10 +53,20 @@ class ClientViewModel : ViewModel() {
     val _addMemberState = MutableStateFlow(AddMemberState())
     val addMemberState = _addMemberState.asStateFlow()
 
-    fun startSplash() {
+    fun startSplash(context: Context) {
         viewModelScope.launch {
             delay(3000)
             _navigateToLogin.value = true
+
+            val user = getLocalUser(context).first()
+            if (!user.id.isNullOrEmpty()) {
+                _isUserLoggedIn.value = true
+                if (user.title == "User") {
+                    _loggedInUser.value = "User"
+                } else {
+                    _loggedInUser.value = "Doctor"
+                }
+            }
         }
     }
 
@@ -231,6 +249,7 @@ class ClientViewModel : ViewModel() {
 
 
     fun addMember(
+        context: Context,
         name:String,
         phone:String,
         dob: String,
@@ -253,6 +272,13 @@ class ClientViewModel : ViewModel() {
             doDelivery = doDelivery,
             location = location, title = "User")
         db.child("users").child(phone).setValue(user).addOnSuccessListener {
+            saveUserLocally(context = context, id = auth,
+                name = name,
+                phone = phone,
+                dob = dob,
+                doc = doc,
+                doDelivery = doDelivery,
+                location = location, title = "User")
             _addMemberState.update {
                 it.copy(
                     isRunning = false,
@@ -268,6 +294,43 @@ class ClientViewModel : ViewModel() {
                     error = message
                 )
             }
+        }
+    }
+
+    private fun saveUserLocally(context:Context, id:String, name: String, phone:String,
+                                dob: String,
+                                doc: String,
+                                doDelivery: String,
+                                location: String,
+                                title:String) {
+        viewModelScope.launch {
+            context.userDataStore.updateData {user ->
+                user.toBuilder()
+                    .setId(id)
+                    .setName(name)
+                    .setPhone(phone)
+                    .setDob(dob)
+                    .setDoc(doc)
+                    .setDoDelivery(doDelivery)
+                    .setLocation(location)
+                    .setTitle(title)
+                    .build()
+            }
+        }
+    }
+
+    fun getLocalUser(context: Context): Flow<User> {
+        return context.userDataStore.data.map { userProto->
+            User(
+                id = userProto.id.orEmpty(),
+                name = userProto.name.orEmpty(),
+                phone = userProto.phone.orEmpty(),
+                dob = userProto.dob.orEmpty(),
+                doc = userProto.doc.orEmpty(),
+                doDelivery = userProto.doDelivery.orEmpty(),
+                location = userProto.location.orEmpty(),
+                title = userProto.title.orEmpty()
+            )
         }
     }
 }

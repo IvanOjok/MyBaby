@@ -2,6 +2,7 @@ package inc.pneuma.mybaby.ui.presentation
 
 
 import android.app.Activity
+import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -46,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +71,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import inc.pneuma.mybaby.R
+import inc.pneuma.mybaby.data.model.User
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -79,8 +83,17 @@ import java.util.Locale
 @Composable
 fun MainScreen(activity: Activity, viewModel: ClientViewModel) {
     val navController = rememberNavController()
+    val isLoggedIn by viewModel.isUserLoggedIn.collectAsState()
+    val loggedInUser by viewModel.loggedInUser.collectAsState()
+    val startRoute = if (isLoggedIn) {
+        if (loggedInUser == "User") {
+            NavScreen.UserHome.route
+        } else {
+            NavScreen.DoctorHome.route
+        }
+    } else NavScreen.Login.route
     
-    NavHost(navController = navController, startDestination = NavScreen.Login.route) {
+    NavHost(navController = navController, startDestination = startRoute) {
 
         composable(NavScreen.Login.route) {
             SignInScreen(navController, activity, viewModel)
@@ -107,7 +120,7 @@ fun MainScreen(activity: Activity, viewModel: ClientViewModel) {
         }
 
         composable(NavScreen.UserHome.route) {
-            UserHomeScreen()
+            UserHomeScreen(navController, activity, viewModel)
         }
 
         composable(NavScreen.DoctorHome.route) {
@@ -321,7 +334,7 @@ fun RegisterUserScreen(navController: NavController, activity: Activity, viewMod
                 Spacer(modifier = Modifier.height(5.dp))
                 Button(onClick = {
                     showBottomSheet = false
-                    viewModel.addMember(name = userName, phone = phone, dob = dob, doc=doc, doDelivery = doDelivery, location = residence)
+                    viewModel.addMember(context = activity, name = userName, phone = phone, dob = dob, doc=doc, doDelivery = doDelivery, location = residence)
                 }) {
                     Text(text = "Retry", color = Color.White, fontSize = 18.sp)
                 }
@@ -444,7 +457,7 @@ fun RegisterUserScreen(navController: NavController, activity: Activity, viewMod
                                  doc.isEmpty() -> { Toast.makeText(activity, "Date Of Conception cannot be empty", Toast.LENGTH_SHORT).show() }
                                  residence.isEmpty() -> { Toast.makeText(activity, "Place Of Residence cannot be empty", Toast.LENGTH_SHORT).show() }
                                  else -> {
-                                     viewModel.addMember(name = userName, phone = phone, dob = dob, doc=doc, doDelivery = doDelivery, location = residence)
+                                     viewModel.addMember(context = activity, name = userName, phone = phone, dob = dob, doc=doc, doDelivery = doDelivery, location = residence)
                                      //navController.navigate(NavScreen.UserHome.route)
                                  }
                              }
@@ -459,7 +472,11 @@ fun RegisterUserScreen(navController: NavController, activity: Activity, viewMod
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UserHomeScreen() {
+fun UserHomeScreen(navController: NavController, context: Context, viewModel: ClientViewModel) {
+    //var localUser by remember { mutableStateOf(User) }
+    val user = viewModel.getLocalUser(context).collectAsState(null).value
+
+
     Box(modifier = Modifier
         .fillMaxSize()
         .padding(20.dp), contentAlignment = Alignment.TopCenter)
@@ -472,9 +489,9 @@ fun UserHomeScreen() {
                     .width(45.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(5.dp))
                 Column {
-                    Text(text = "Mr. Ivan Ojok")
+                    Text(text = "Welcome, ${user?.name?.substringBefore(" ")}")
                     Spacer(modifier = Modifier.height(1.dp))
-                    Text(text = "256 704253811")
+                    Text(text = "0${user?.phone}")
                 }
 
                 Column(modifier = Modifier
@@ -493,7 +510,7 @@ fun UserHomeScreen() {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(text = "Expected Delivery Date")
                     Spacer(modifier = Modifier.height(5.dp))
-                    Text(text = "~ 5 months, 9 days")
+                    Text(text = "~ ${user?.doDelivery}")
                 }
             }
 
@@ -507,7 +524,9 @@ fun UserHomeScreen() {
                     Column(modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Rounded.PhoneInTalk, contentDescription = null, modifier = Modifier.height(70.dp).width(45.dp))
+                        Icon(imageVector = Icons.Rounded.PhoneInTalk, contentDescription = null, modifier = Modifier
+                            .height(70.dp)
+                            .width(45.dp))
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(text = "Call")
                     }
@@ -519,7 +538,9 @@ fun UserHomeScreen() {
                     Column(modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier.height(70.dp).width(45.dp))
+                        Icon(imageVector = Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier
+                            .height(70.dp)
+                            .width(45.dp))
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(text = "Location")
                     }
@@ -535,7 +556,9 @@ fun UserHomeScreen() {
                     Column(modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Rounded.FoodBank, contentDescription = null, modifier = Modifier.height(70.dp).width(45.dp))
+                        Icon(imageVector = Icons.Rounded.FoodBank, contentDescription = null, modifier = Modifier
+                            .height(70.dp)
+                            .width(45.dp))
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(text = "Nutrition")
                     }
@@ -547,7 +570,9 @@ fun UserHomeScreen() {
                     Column(modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Rounded.SportsGymnastics, contentDescription = null, modifier = Modifier.height(70.dp).width(45.dp))
+                        Icon(imageVector = Icons.Rounded.SportsGymnastics, contentDescription = null, modifier = Modifier
+                            .height(70.dp)
+                            .width(45.dp))
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(text = "Exercise")
                     }

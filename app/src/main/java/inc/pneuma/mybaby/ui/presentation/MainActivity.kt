@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         installSplashScreen().apply {
-            viewModel.startSplash()
+            viewModel.startSplash(this@MainActivity)
             setKeepOnScreenCondition {
                 !viewModel.navigateToLogin.value
             }

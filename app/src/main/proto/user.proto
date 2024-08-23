@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option java_package = "inc.pneuma.mybaby";
+option java_multiple_files = true;
+
+message UserProto {
+  string id = 1;
+  string name = 2;
+  string phone = 3;
+  string dob = 4;
+  string doc = 5;
+  string doDelivery = 6;
+  string location = 7;
+  string title = 8;
+}

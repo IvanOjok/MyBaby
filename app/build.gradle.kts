@@ -4,7 +4,7 @@ plugins {
     id("dagger.hilt.android.plugin")
     id("com.google.devtools.ksp")
     id("com.google.gms.google-services")
-
+    id("com.google.protobuf") version "0.9.4"
 }
 
 android {
@@ -111,4 +111,17 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
     //images
     implementation("io.coil-kt:coil-compose:2.5.0")
+}
+
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:3.19.2" }
+    generateProtoTasks {
+        all().forEach {
+            it.builtins {
+                create("java") {
+                    option("lite")
+                }
+            }
+        }
+    }
 }
