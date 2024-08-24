@@ -4,7 +4,9 @@ package inc.pneuma.mybaby.ui.presentation
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -31,6 +34,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.FoodBank
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.PhoneCallback
 import androidx.compose.material.icons.rounded.PhoneInTalk
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
@@ -95,9 +99,6 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import inc.pneuma.mybaby.R
-import inc.pneuma.mybaby.data.model.User
-import kotlinx.coroutines.flow.first
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -105,6 +106,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import kotlin.random.Random
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -151,7 +153,19 @@ fun MainScreen(activity: Activity, viewModel: ClientViewModel) {
         }
 
         composable(NavScreen.DoctorHome.route) {
-            DoctorHomeScreen()
+            DoctorHomeScreen(navController)
+        }
+
+        composable(NavScreen.Maps.route) {
+            UserMapActivity(navController, activity, viewModel)
+        }
+
+        composable(NavScreen.GetCalls.route) {
+            GetCallsScreen(navController, viewModel)
+        }
+
+        composable(NavScreen.GetLocations.route) {
+            GetLocationScreen(navController, viewModel)
         }
     }
 
@@ -279,7 +293,7 @@ fun VerifyCodeScreen(navController: NavController, activity: Activity, viewModel
                 Spacer(modifier = Modifier.height(5.dp))
                 Button(onClick = {
                     showBottomSheet = false
-                    viewModel.verifyCode(verificationId, userCode, activity)
+                    viewModel.verifyCode(phone, verificationId, userCode, activity)
                 }) {
                     Text(text = "Retry", color = Color.White, fontSize = 18.sp)
                 }
@@ -303,7 +317,7 @@ fun VerifyCodeScreen(navController: NavController, activity: Activity, viewModel
 
             Spacer(modifier = Modifier.height(50.dp))
             Button(onClick = {
-                viewModel.verifyCode(verificationId, userCode, activity)
+                viewModel.verifyCode(phone, verificationId, userCode, activity)
                 //navController.navigate(NavScreen.Register.route)
                              }, modifier = Modifier
                 .fillMaxWidth()
@@ -497,11 +511,13 @@ fun RegisterUserScreen(navController: NavController, activity: Activity, viewMod
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserHomeScreen(navController: NavController, context: Context, viewModel: ClientViewModel) {
     //var localUser by remember { mutableStateOf(User) }
     val user = viewModel.getLocalUser(context).collectAsState(null).value
+    val time = LocalDateTime.now().format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))
 
 
     Box(modifier = Modifier
@@ -545,7 +561,19 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
             Row(modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = {
+                    val u = Uri.parse("tel:" + "0704253811")
+                    val i = Intent(Intent.ACTION_DIAL, u)
+                    try {
+                        context.startActivity(i)
+                    } catch (s: SecurityException) {
+                        Toast.makeText(context, "An error occurred ${s.message}", Toast.LENGTH_LONG)
+                            .show()
+                    }
+
+                    viewModel.saveCallInformation(context = context, time = time)
+                    navController.navigateUp()
+                }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -559,7 +587,7 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
                     }
                 }
                 Spacer(modifier = Modifier.width(5.dp))
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.Maps.route) }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -612,7 +640,7 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DoctorHomeScreen() {
+fun DoctorHomeScreen(navController: NavController) {
     Box(modifier = Modifier
         .fillMaxSize()
         .padding(20.dp), contentAlignment = Alignment.TopCenter)
@@ -654,7 +682,7 @@ fun DoctorHomeScreen() {
             Row(modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.GetCalls.route) }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -666,7 +694,7 @@ fun DoctorHomeScreen() {
                     }
                 }
                 Spacer(modifier = Modifier.width(5.dp))
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.GetLocations.route) }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -716,8 +744,8 @@ fun DoctorHomeScreen() {
 @Composable
 fun UserMapActivity(navController: NavController, activity: Activity, viewModel: ClientViewModel) {
 
-    var latitude by remember { mutableStateOf(0.0) }
-    var longitude by remember { mutableStateOf(0.0) }
+    var latitude by remember { mutableStateOf(0.31) }
+    var longitude by remember { mutableStateOf(32.0) }
     val uiSettings by remember { mutableStateOf(MapUiSettings(zoomControlsEnabled = true)) }
     val properties by remember { mutableStateOf(MapProperties(mapType = MapType.TERRAIN)) }
     val time = LocalDateTime.now().format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))
@@ -835,6 +863,107 @@ fun UserMapActivity(navController: NavController, activity: Activity, viewModel:
             }
             }
     }
+
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GetCallsScreen(navController: NavController, viewModel: ClientViewModel) {
+    val callState = viewModel.getCallState.collectAsState()
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Calls")
+            }
+
+        }) }
+    ) {padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp), contentAlignment = Alignment.TopStart) {
+
+            LazyColumn() {
+                items(callState.value.call) {element ->
+                    Card(modifier = Modifier
+                        .fillMaxWidth()
+                        .height(70.dp)
+                        .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
+                        Row {
+                            Icon(imageVector = Icons.Rounded.PhoneCallback, contentDescription = null, modifier = Modifier
+                                .width(50.dp)
+                                .height(50.dp), tint = Color.Green)
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Column {
+                                Text(text = element)
+                                Spacer(modifier = Modifier.height(1.dp))
+                                Text(text = element)
+                            }
+                        }
+                    }
+                }
+                }
+            }
+    }
+    
+    
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GetLocationScreen(navController: NavController, viewModel: ClientViewModel) {
+    val locationState = viewModel.getLocationState.collectAsState()
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Calls")
+            }
+
+        }) }
+    ) {padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp), contentAlignment = Alignment.TopStart) {
+
+            LazyColumn() {
+                items(locationState.value.location) {element ->
+                    Card(modifier = Modifier
+                        .fillMaxWidth()
+                        .height(70.dp)
+                        .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
+                        Row {
+                            Icon(imageVector = Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier
+                                .width(50.dp)
+                                .height(50.dp), tint = Color.Blue)
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Column {
+                                Text(text = element)
+                                Spacer(modifier = Modifier.height(1.dp))
+                                Text(text = element)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 
 }
 

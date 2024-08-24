@@ -19,6 +19,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import inc.pneuma.mybaby.data.model.CallInfo
 import inc.pneuma.mybaby.data.model.LocationInfo
 import inc.pneuma.mybaby.data.model.User
 import inc.pneuma.mybaby.data.model.userDataStore
@@ -54,8 +55,14 @@ class ClientViewModel : ViewModel() {
     val _addMemberState = MutableStateFlow(AddMemberState())
     val addMemberState = _addMemberState.asStateFlow()
 
-    val _getLocationState = MutableStateFlow(AddLocationState())
+    val _addLocationState = MutableStateFlow(AddLocationState())
+    val addLocationState = _addLocationState.asStateFlow()
+
+    val _getLocationState = MutableStateFlow(GetLocationState())
     val getLocationState = _getLocationState.asStateFlow()
+
+    val _getCallState = MutableStateFlow(GetCallState())
+    val getCallState = _getCallState.asStateFlow()
 
     fun startSplash(context: Context) {
         viewModelScope.launch {
@@ -101,7 +108,7 @@ class ClientViewModel : ViewModel() {
                     )
                 }
 
-                signInWithPhoneAuthCredential(credential, activity)
+                signInWithPhoneAuthCredential(phoneNumber, credential, activity)
             }
 
             override fun onVerificationFailed(e: FirebaseException) {
@@ -158,12 +165,12 @@ class ClientViewModel : ViewModel() {
         PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
-    fun verifyCode(verificationId: String, code: String, activity: Activity) {
+    fun verifyCode(phone: String, verificationId: String, code: String, activity: Activity) {
         val credential = PhoneAuthProvider.getCredential(verificationId, code)
-        signInWithPhoneAuthCredential(credential, activity)
+        signInWithPhoneAuthCredential(phone, credential, activity)
     }
 
-    private fun signInWithPhoneAuthCredential(credential: PhoneAuthCredential, activity: Activity) {
+    private fun signInWithPhoneAuthCredential(phone: String, credential: PhoneAuthCredential, activity: Activity) {
         _verifyState.update {
             it.copy(
                 isRunning = true,
@@ -180,7 +187,7 @@ class ClientViewModel : ViewModel() {
 
                     val user = task.result?.user
                     if (user != null) {
-                        getMember(user.phoneNumber?:"")
+                        getMember(phone) //user.phoneNumber?:""
                     } else {
                         _verifyState.update {
                             it.copy(
@@ -346,7 +353,7 @@ class ClientViewModel : ViewModel() {
         time: String,
         status: String) {
 
-        _getLocationState.update {
+        _addLocationState.update {
             it.copy(
                 isRunning = true
             )
@@ -362,7 +369,7 @@ class ClientViewModel : ViewModel() {
                 time = time,
                 status = status,)
             db.child("location").child(user.phone).setValue(location).addOnSuccessListener {
-                _getLocationState.update {
+                _addLocationState.update {
                     it.copy(
                         isRunning = false,
                         isComplete = true
@@ -370,7 +377,7 @@ class ClientViewModel : ViewModel() {
                 }
             }.addOnFailureListener {
                 val message = it.message
-                _getLocationState.update {
+                _addLocationState.update {
                     it.copy(
                         isRunning = false,
                         isComplete = false,
@@ -381,6 +388,115 @@ class ClientViewModel : ViewModel() {
         }
 
     }
+
+
+    fun getLocationInfo(context: Context,) {
+        viewModelScope.launch {
+            val list = ArrayList<LocationInfo?>()
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            db.child("location").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val location = i.getValue(LocationInfo::class.java)
+                        list.add(location)
+                    }
+
+                    _getLocationState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            location = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getLocationState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
+
+    fun saveCallInformation(
+        context: Context,
+        time: String, ) {
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            val call = CallInfo(
+                phone = user.phone,
+                time = time,
+                )
+            db.child("calls").child(user.phone).setValue(call).addOnSuccessListener {
+                _addLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = true
+                    )
+                }
+            }.addOnFailureListener {
+                val message = it.message
+                _addLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = false,
+                        error = message
+                    )
+                }
+            }
+        }
+
+    }
+
+
+    fun getCallInfo(context: Context,) {
+        viewModelScope.launch {
+            val list = ArrayList<CallInfo?>()
+            val db = initializeDatabase().reference
+            db.child("calls").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val call = i.getValue(CallInfo::class.java)
+                        list.add(call)
+                    }
+
+                    _getCallState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            call = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getLocationState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
 }
 
 data class LoginState(
@@ -405,6 +521,27 @@ data class AddMemberState(
 )
 
 data class AddLocationState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+
+data class GetLocationState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val location: List<LocationInfo?>?= null,
+    val error: String? = null
+)
+
+data class GetCallState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val call: List<CallInfo?>?= null,
+    val error: String? = null
+)
+
+data class AddNutritionState(
     val isRunning: Boolean = false,
     val isComplete:Boolean = false,
     val error: String? = null
