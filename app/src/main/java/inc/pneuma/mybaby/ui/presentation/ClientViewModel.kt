@@ -19,6 +19,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import inc.pneuma.mybaby.data.model.LocationInfo
 import inc.pneuma.mybaby.data.model.User
 import inc.pneuma.mybaby.data.model.userDataStore
 import kotlinx.coroutines.delay
@@ -52,6 +53,9 @@ class ClientViewModel : ViewModel() {
 
     val _addMemberState = MutableStateFlow(AddMemberState())
     val addMemberState = _addMemberState.asStateFlow()
+
+    val _getLocationState = MutableStateFlow(AddLocationState())
+    val getLocationState = _getLocationState.asStateFlow()
 
     fun startSplash(context: Context) {
         viewModelScope.launch {
@@ -333,6 +337,50 @@ class ClientViewModel : ViewModel() {
             )
         }
     }
+
+
+    fun saveLocationInformation(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        time: String,
+        status: String) {
+
+        _getLocationState.update {
+            it.copy(
+                isRunning = true
+            )
+        }
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            val location = LocationInfo(
+                phone = user.phone,
+                latitude = latitude,
+                longitude = longitude,
+                time = time,
+                status = status,)
+            db.child("location").child(user.phone).setValue(location).addOnSuccessListener {
+                _getLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = true
+                    )
+                }
+            }.addOnFailureListener {
+                val message = it.message
+                _getLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = false,
+                        error = message
+                    )
+                }
+            }
+        }
+
+    }
 }
 
 data class LoginState(
@@ -351,6 +399,12 @@ data class VerifyState(
 )
 
 data class AddMemberState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+data class AddLocationState(
     val isRunning: Boolean = false,
     val isComplete:Boolean = false,
     val error: String? = null

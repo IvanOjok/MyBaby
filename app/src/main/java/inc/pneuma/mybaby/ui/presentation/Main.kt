@@ -1,8 +1,10 @@
 package inc.pneuma.mybaby.ui.presentation
 
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -23,12 +25,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.FoodBank
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.PhoneInTalk
+import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SportsGymnastics
 import androidx.compose.material3.Button
@@ -38,12 +42,15 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -64,19 +71,39 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import inc.pneuma.mybaby.R
 import inc.pneuma.mybaby.data.model.User
 import kotlinx.coroutines.flow.first
+import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -683,4 +710,134 @@ fun DoctorHomeScreen() {
         }
     }
 }
+
+@RequiresApi(Build.VERSION_CODES.O)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun UserMapActivity(navController: NavController, activity: Activity, viewModel: ClientViewModel) {
+
+    var latitude by remember { mutableStateOf(0.0) }
+    var longitude by remember { mutableStateOf(0.0) }
+    val uiSettings by remember { mutableStateOf(MapUiSettings(zoomControlsEnabled = true)) }
+    val properties by remember { mutableStateOf(MapProperties(mapType = MapType.TERRAIN)) }
+    val time = LocalDateTime.now().format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))
+
+    val fusedLocationProviderClient: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(activity)
+
+    // Determine the accuracy priority based on the 'priority' parameter
+    val accuracy =  Priority.PRIORITY_HIGH_ACCURACY
+    //else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+
+    // Check if location permissions are granted
+    // Initialize the state for managing multiple location permissions.
+    val permissionState = rememberMultiplePermissionsState(
+        listOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
+    )
+
+    // Use LaunchedEffect to handle permissions logic when the composition is launched.
+    LaunchedEffect(key1 = permissionState) {
+        // Check if all previously granted permissions are revoked.
+        val allPermissionsRevoked =
+            permissionState.permissions.size == permissionState.revokedPermissions.size
+
+        // Filter permissions that need to be requested.
+        val permissionsToRequest = permissionState.permissions.filter {
+            !it.status.isGranted
+        }
+
+        // If there are permissions to request, launch the permission request.
+        if (permissionsToRequest.isNotEmpty()) permissionState.launchMultiplePermissionRequest()
+
+        // Execute callbacks based on permission status.
+        if (allPermissionsRevoked || !permissionState.allPermissionsGranted) {
+            return@LaunchedEffect
+        } else {
+            if (permissionState.allPermissionsGranted) {
+                if (ActivityCompat.checkSelfPermission(
+                        activity,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                        activity,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return@LaunchedEffect
+                }
+                fusedLocationProviderClient.getCurrentLocation(
+                    accuracy, CancellationTokenSource().token,
+                ).addOnSuccessListener { location ->
+                    location?.let {
+                        latitude = it.latitude
+                        longitude = it.longitude
+
+                    }
+                }.addOnFailureListener { exception ->
+                   Toast.makeText(activity, "An error occurred $exception", Toast.LENGTH_LONG).show()
+                    navController.navigateUp()
+                }
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Send Location")
+            }
+
+        }) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { viewModel.saveLocationInformation(
+                context = activity,
+                latitude = latitude ,
+                longitude = longitude,
+                time = time,
+                status = "Pending",
+            ) }) {
+                Icon(imageVector = Icons.Rounded.Send, contentDescription = null)
+            }
+        }
+    ) {padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp)) {
+            val point = LatLng(latitude, longitude)
+            val cameraPositionState = rememberCameraPositionState {
+                position = CameraPosition.fromLatLngZoom(point, 15f)
+            }
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                uiSettings = uiSettings,
+                properties = properties
+            ) {
+                Marker(
+                    state = MarkerState(position = point),
+                    title = "My Location"
+                )
+            }
+            }
+    }
+
+}
+
+
+
 
