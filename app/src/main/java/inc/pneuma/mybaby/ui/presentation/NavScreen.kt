@@ -11,4 +11,22 @@ sealed class NavScreen(var route:String) {
     object UserHome: NavScreen("UserHome")
 
     object DoctorHome: NavScreen("DoctorHome")
+
+    object Maps: NavScreen("Maps")
+
+    object GetCalls: NavScreen("GetCalls")
+
+    object GetLocations: NavScreen("GetLocations")
+
+    object ViewLocations: NavScreen("ViewLocations")
+
+    object AddNutrition: NavScreen("AddNutrition")
+
+    object GetNutrition: NavScreen("GetNutrition")
+
+    object AddExercise: NavScreen("AddExercise")
+
+    object GetExercise: NavScreen("GetExercise")
+
+
 }

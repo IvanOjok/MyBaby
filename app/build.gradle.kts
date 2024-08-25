@@ -111,6 +111,16 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
     //images
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    //location
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.35.0-alpha")
+
+    //maps
+    implementation("com.google.maps.android:maps-compose:4.3.3")
+
+    //animation
+    implementation("androidx.compose.animation:animation:1.7.0-rc01")
 }
 
 protobuf {

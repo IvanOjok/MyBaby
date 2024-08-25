@@ -4,9 +4,12 @@ import android.app.Activity
 import android.content.ContentValues
 import android.content.ContentValues.TAG
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.tasks.OnCompleteListener
+import com.google.android.gms.tasks.Task
 import com.google.firebase.FirebaseException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
@@ -19,6 +22,12 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.UploadTask
+import inc.pneuma.mybaby.data.model.CallInfo
+import inc.pneuma.mybaby.data.model.ExerciseInfo
+import inc.pneuma.mybaby.data.model.LocationInfo
+import inc.pneuma.mybaby.data.model.NutritionInfo
 import inc.pneuma.mybaby.data.model.User
 import inc.pneuma.mybaby.data.model.userDataStore
 import kotlinx.coroutines.delay
@@ -29,6 +38,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class ClientViewModel : ViewModel() {
@@ -52,6 +62,27 @@ class ClientViewModel : ViewModel() {
 
     val _addMemberState = MutableStateFlow(AddMemberState())
     val addMemberState = _addMemberState.asStateFlow()
+
+    val _addLocationState = MutableStateFlow(AddLocationState())
+    val addLocationState = _addLocationState.asStateFlow()
+
+    val _getLocationState = MutableStateFlow(GetLocationState())
+    val getLocationState = _getLocationState.asStateFlow()
+
+    val _getCallState = MutableStateFlow(GetCallState())
+    val getCallState = _getCallState.asStateFlow()
+
+    val _addNutritionState = MutableStateFlow(AddNutritionState())
+    val addNutritionState = _addNutritionState.asStateFlow()
+
+    val _getNutritionState = MutableStateFlow(GetNutritionState())
+    val getNutritionState = _getNutritionState.asStateFlow()
+
+    val _addExerciseState = MutableStateFlow(AddExerciseState())
+    val addExerciseState = _addExerciseState.asStateFlow()
+
+    val _getExerciseState = MutableStateFlow(GetExerciseState())
+    val getExerciseState = _getExerciseState.asStateFlow()
 
     fun startSplash(context: Context) {
         viewModelScope.launch {
@@ -78,6 +109,10 @@ class ClientViewModel : ViewModel() {
         return FirebaseDatabase.getInstance()
     }
 
+    fun initializeStorage(): FirebaseStorage {
+        return FirebaseStorage.getInstance()
+    }
+
     fun login(phoneNumber: String, activity: Activity) {
 
         val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
@@ -97,7 +132,7 @@ class ClientViewModel : ViewModel() {
                     )
                 }
 
-                signInWithPhoneAuthCredential(credential, activity)
+                signInWithPhoneAuthCredential(phoneNumber, credential, activity)
             }
 
             override fun onVerificationFailed(e: FirebaseException) {
@@ -154,12 +189,12 @@ class ClientViewModel : ViewModel() {
         PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
-    fun verifyCode(verificationId: String, code: String, activity: Activity) {
+    fun verifyCode(phone: String, verificationId: String, code: String, activity: Activity) {
         val credential = PhoneAuthProvider.getCredential(verificationId, code)
-        signInWithPhoneAuthCredential(credential, activity)
+        signInWithPhoneAuthCredential(phone, credential, activity)
     }
 
-    private fun signInWithPhoneAuthCredential(credential: PhoneAuthCredential, activity: Activity) {
+    private fun signInWithPhoneAuthCredential(phone: String, credential: PhoneAuthCredential, activity: Activity) {
         _verifyState.update {
             it.copy(
                 isRunning = true,
@@ -176,7 +211,7 @@ class ClientViewModel : ViewModel() {
 
                     val user = task.result?.user
                     if (user != null) {
-                        getMember(user.phoneNumber?:"")
+                        getMember(activity, phone) //user.phoneNumber?:""
                     } else {
                         _verifyState.update {
                             it.copy(
@@ -206,13 +241,19 @@ class ClientViewModel : ViewModel() {
             }
     }
 
-    fun getMember(userId: String) {
+    fun getMember(context: Context, userId: String) {
         val db = initializeDatabase().reference
         db.child("users").child(userId).addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.exists()) {
                     val user = snapshot.getValue(User::class.java)
-
+                    saveUserLocally(context = context, id = user?.id ?:"",
+                        name = user?.name ?:"" ,
+                        phone = user?.phone ?:"",
+                        dob = user?.dob ?:"",
+                        doc = user?.doc ?:"",
+                        doDelivery = user?.doDelivery ?:"",
+                        location = user?.location ?:"", title = user?.title ?:"")
                     _verifyState.update {
                         it.copy(
                             isRunning = false,
@@ -333,6 +374,437 @@ class ClientViewModel : ViewModel() {
             )
         }
     }
+
+    fun removeLocalUser(context: Context) {
+        viewModelScope.launch {
+            context.userDataStore.updateData {
+                it.toBuilder().clear().build()
+            }
+        }
+    }
+
+    fun saveLocationInformation(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        time: String,
+        status: String) {
+
+        _addLocationState.update {
+            it.copy(
+                isRunning = true
+            )
+        }
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            val location = LocationInfo(
+                phone = user.phone,
+                latitude = latitude,
+                longitude = longitude,
+                time = time,
+                status = status,)
+            db.child("location").child(user.phone).setValue(location).addOnSuccessListener {
+                _addLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = true
+                    )
+                }
+            }.addOnFailureListener {
+                val message = it.message
+                _addLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = false,
+                        error = message
+                    )
+                }
+            }
+        }
+
+    }
+
+
+    fun getLocationInfo(context: Context,) {
+        _getLocationState.update {
+            it.copy(
+                isRunning = true,
+            )
+        }
+        viewModelScope.launch {
+            val list = ArrayList<LocationInfo?>()
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            db.child("location").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val location = i.getValue(LocationInfo::class.java)
+                        list.add(location)
+                    }
+
+                    _getLocationState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            location = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getLocationState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
+
+    fun saveCallInformation(
+        context: Context,
+        time: String, ) {
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            val call = CallInfo(
+                phone = user.phone,
+                time = time,
+                )
+            db.child("calls").child(user.phone).setValue(call).addOnSuccessListener {
+                _addLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = true
+                    )
+                }
+            }.addOnFailureListener {
+                val message = it.message
+                _addLocationState.update {
+                    it.copy(
+                        isRunning = false,
+                        isComplete = false,
+                        error = message
+                    )
+                }
+            }
+        }
+
+    }
+
+
+    fun getCallInfo(context: Context,) {
+        _getCallState.update {
+            it.copy(
+                isRunning = true,
+            )
+        }
+        viewModelScope.launch {
+            val list = ArrayList<CallInfo?>()
+            val db = initializeDatabase().reference
+            db.child("calls").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val call = i.getValue(CallInfo::class.java)
+                        list.add(call)
+                    }
+
+                    _getCallState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            call = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getCallState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
+    fun saveNutritionInformation(
+        context: Context,
+        image: Uri,
+        name: String,
+        quantity: String,
+        benefit: String) {
+
+        _addNutritionState.update {
+            it.copy(
+                isRunning = true
+            )
+        }
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+
+            val uuid = UUID.randomUUID().toString()
+
+            val storageRef = initializeStorage().reference.child("nutrition/$name")
+            val uploadTask = storageRef.putFile(image)
+            uploadTask.continueWithTask { task->
+                val url = storageRef.downloadUrl
+                val nutrition = NutritionInfo(
+                    image =  url.toString() ,
+                    name =  name ,
+                    quantity =  quantity ,
+                    benefit =  benefit ,
+                    addedBy = user.phone,)
+                db.child("nutrition").child(uuid).setValue(nutrition).addOnSuccessListener {
+                    _addNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true
+                        )
+                    }
+                }.addOnFailureListener {
+                    val message = it.message
+                    _addNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+                storageRef.downloadUrl
+
+            }.addOnCompleteListener { task->
+                if (task.isSuccessful) {
+                    val imagePath = task.result
+                    //val imagePath = storageRef.downloadUrl.result
+
+                    if (imagePath != null) {
+                        val nutrition = NutritionInfo(
+                            image =  imagePath.toString() ,
+                            name =  name ,
+                            quantity =  quantity ,
+                            benefit =  benefit ,
+                            addedBy = user.phone,)
+                        db.child("nutrition").child(uuid).setValue(nutrition).addOnSuccessListener {
+                            _addNutritionState.update {
+                                it.copy(
+                                    isRunning = false,
+                                    isComplete = true
+                                )
+                            }
+                        }.addOnFailureListener {
+                            val message = it.message
+                            _addNutritionState.update {
+                                it.copy(
+                                    isRunning = false,
+                                    isComplete = false,
+                                    error = message
+                                )
+                            }
+                        }
+                    }
+
+                }
+            }
+
+
+        }
+
+    }
+
+
+    fun getNutritionInfo(context: Context,) {
+
+        _getNutritionState.update {
+            it.copy(
+                isRunning = true,
+            )
+        }
+
+        viewModelScope.launch {
+            val list = ArrayList<NutritionInfo?>()
+
+            val db = initializeDatabase().reference
+            db.child("nutrition").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val nutritionInfo = i.getValue(NutritionInfo::class.java)
+//                        val url = initializeStorage().getReferenceFromUrl(nutritionInfo?.image ?: "").downloadUrl.result.path
+//                        val info = NutritionInfo(
+//                            image = url ?: "",
+//                            name = nutritionInfo?.name ?: "",
+//                            quantity = nutritionInfo?.quantity ?: "",
+//                            benefit = nutritionInfo?.benefit ?: "",
+//                            addedBy = nutritionInfo?.addedBy ?: ""
+//                        )
+                        list.add(nutritionInfo)
+                    }
+
+                    _getNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            nutrition = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
+
+    fun saveExerciseInformation(
+        context: Context,
+        image: Uri,
+        name: String,
+        description: String,
+        ) {
+
+        _addExerciseState.update {
+            it.copy(
+                isRunning = true
+            )
+        }
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+            val uuid = UUID.randomUUID().toString()
+
+            val storageRef = initializeStorage().reference.child("exercise/$name")
+            val uploadTask = storageRef.putFile(image)
+            uploadTask.continueWithTask { task->
+                if (task.isSuccessful) {
+                    val imagePath = storageRef.downloadUrl.toString()
+
+                    val exercise = ExerciseInfo(
+                        image =  imagePath ,
+                        name =  name ,
+                        description =  description ,
+                        addedBy = user.phone,)
+                    db.child("exercise").child(uuid).setValue(exercise).addOnSuccessListener {
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = true
+                            )
+                        }
+                    }.addOnFailureListener {
+                        val message = it.message
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = false,
+                                error = message
+                            )
+                        }
+                    }
+                }
+                storageRef.downloadUrl
+            }.addOnCompleteListener { task->
+                if (task.isSuccessful) {
+                    val imagePath = task.result.toString()
+
+                    val exercise = ExerciseInfo(
+                        image =  imagePath ,
+                        name =  name ,
+                        description =  description ,
+                        addedBy = user.phone,)
+                    db.child("exercise").child(uuid).setValue(exercise).addOnSuccessListener {
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = true
+                            )
+                        }
+                    }.addOnFailureListener {
+                        val message = it.message
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = false,
+                                error = message
+                            )
+                        }
+                    }
+                }
+            }
+
+
+        }
+
+    }
+
+
+    fun getExerciseInfo(context: Context,) {
+        viewModelScope.launch {
+            val list = ArrayList<ExerciseInfo?>()
+            val db = initializeDatabase().reference
+            db.child("exercise").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val exerciseInfo = i.getValue(ExerciseInfo::class.java)
+                        list.add(exerciseInfo)
+                    }
+
+                    _getExerciseState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            exercise = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getExerciseState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
 }
 
 data class LoginState(
@@ -353,5 +825,52 @@ data class VerifyState(
 data class AddMemberState(
     val isRunning: Boolean = false,
     val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+data class AddLocationState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+
+data class GetLocationState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val location: List<LocationInfo?>?= null,
+    val error: String? = null
+)
+
+data class GetCallState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val call: List<CallInfo?>?= null,
+    val error: String? = null
+)
+
+data class AddNutritionState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+data class GetNutritionState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val nutrition: List<NutritionInfo?>?= null,
+    val error: String? = null
+)
+
+data class AddExerciseState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+data class GetExerciseState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val exercise: List<ExerciseInfo?>?= null,
     val error: String? = null
 )
