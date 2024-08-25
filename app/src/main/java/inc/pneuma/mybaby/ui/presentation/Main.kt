@@ -10,6 +10,9 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -31,6 +34,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.FoodBank
@@ -69,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -83,6 +88,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -100,6 +106,8 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import inc.pneuma.mybaby.R
+import inc.pneuma.mybaby.data.model.User
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -167,6 +175,14 @@ fun MainScreen(activity: Activity, viewModel: ClientViewModel) {
 
         composable(NavScreen.GetLocations.route) {
             GetLocationScreen(navController, activity, viewModel)
+        }
+
+        composable(NavScreen.AddNutrition.route) {
+            AddNutritionInfo(navController, activity, viewModel)
+        }
+
+        composable(NavScreen.GetNutrition.route) {
+            GetNutritionInfo(navController, activity, viewModel)
         }
     }
 
@@ -450,7 +466,6 @@ fun RegisterUserScreen(navController: NavController, activity: Activity, viewMod
             Image(painter = painterResource(id = R.drawable.preg_logo), contentDescription = null, modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp))
-            Text(text = "Register", fontStyle = FontStyle.Italic)
             Spacer(modifier = Modifier.height(10.dp))
             Text(text = "Enter Your Name")
             Spacer(modifier = Modifier.height(2.dp))
@@ -606,7 +621,7 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
             Row(modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.GetNutrition.route) }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -711,7 +726,7 @@ fun DoctorHomeScreen(navController: NavController) {
             Row(modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.GetNutrition.route) }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -976,6 +991,259 @@ fun GetLocationScreen(navController: NavController, context: Context, viewModel:
 
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddNutritionInfo(navController: NavController, context: Context, viewModel: ClientViewModel) {
 
+    val addNutritionState by viewModel.addNutritionState.collectAsState()
+    val sheetState = rememberModalBottomSheetState()
+    var showBottomSheet by remember { mutableStateOf(false) }
+
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    //val image by rememberSaveable { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var quantity by rememberSaveable { mutableStateOf("") }
+    var benefit by rememberSaveable { mutableStateOf("") }
+
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        //contract = ActivityResultContracts.PickMultipleVisualMedia(),
+        onResult = { uri ->
+            uri.let {
+                imageUri = it
+            }
+        }
+    )
+
+    if (addNutritionState.isRunning) {
+        CircularProgressIndicator(modifier = Modifier
+            .width(70.dp)
+            .background(color = Color.Transparent), color = MaterialTheme.colorScheme.secondary)
+    } else if (addNutritionState.isComplete) {
+        navController.navigate(NavScreen.DoctorHome.route)
+    } else if (!addNutritionState.error.isNullOrEmpty()) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showBottomSheet = false
+            },
+            sheetState = sheetState
+        ) {
+            // Sheet content
+
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp, bottom = 50.dp, start = 10.dp, end = 10.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+
+                Icon(imageVector = Icons.Rounded.Error, contentDescription = null, tint = Color.Red, modifier = Modifier
+                    .width(70.dp)
+                    .height(70.dp)
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(text = addNutritionState.error?: "An error occurred")
+                Spacer(modifier = Modifier.height(5.dp))
+                Button(onClick = {
+                    showBottomSheet = false
+                    viewModel.saveNutritionInformation(context = context, name = name, image = imageUri!!, quantity = quantity, benefit = benefit)
+                }) {
+                    Text(text = "Retry", color = Color.White, fontSize = 18.sp)
+                }
+            }
+
+        }
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Add Nutrition")
+            }
+
+        }) }
+    ) { padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp), contentAlignment = Alignment.TopStart) {
+            Column(modifier =  Modifier.fillMaxWidth()) {
+                //Image(imageVector = Icons.Rounded.AccountCircle, contentDescription = null, modifier = Modifier.height(150.dp))
+                AsyncImage(model = imageUri ?: Icons.Rounded.Add, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier
+                    .width(150.dp)
+                    .height(100.dp).clickable {
+                        galleryLauncher.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    }, alignment = Alignment.Center)
+//                Image(painter = painterResource(id = R.drawable.preg_logo), contentDescription = null, modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(150.dp)
+//                    )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = "Enter Name Of Product")
+                Spacer(modifier = Modifier.height(2.dp))
+                TextField(value = name, onValueChange = { name = it }, placeholder = { Text(text = "Enter Name Of Product") }, singleLine= true, shape= RoundedCornerShape(5.dp), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, keyboardType = KeyboardType.Text, imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(text = "Enter Quantity To Be Consumed")
+                Spacer(modifier = Modifier.height(2.dp))
+                TextField(value = quantity, onValueChange = { quantity = it }, placeholder = { Text(text = "Enter Quantity To Be Consumed") }, singleLine= true, shape= RoundedCornerShape(5.dp), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Text, imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(text = "Enter Nutritional Benefit")
+                Spacer(modifier = Modifier.height(2.dp))
+                TextField(value = benefit, onValueChange = { benefit = it }, placeholder={ Text(text = "Enter Nutritional Benefit") }, singleLine= true, shape= RoundedCornerShape(5.dp), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, keyboardType = KeyboardType.Text, imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth())
+
+                Spacer(modifier = Modifier.height(30.dp))
+                Button(onClick = {
+                    when {
+                        imageUri == null -> { Toast.makeText(context, "Product Image cannot be empty", Toast.LENGTH_SHORT).show()}
+                        name.isEmpty() -> { Toast.makeText(context, "Product Name cannot be empty", Toast.LENGTH_SHORT).show() }
+                        quantity.isEmpty() -> { Toast.makeText(context, "Product Quantity cannot be empty", Toast.LENGTH_SHORT).show() }
+                        benefit.isEmpty() -> { Toast.makeText(context, "Product Benefit cannot be empty", Toast.LENGTH_SHORT).show() }
+                        else -> {
+                            viewModel.saveNutritionInformation(context = context, name = name, image = imageUri!!, quantity = quantity, benefit = benefit)
+                            //navController.navigate(NavScreen.UserHome.route)
+                        }
+                    }
+                }, modifier = Modifier
+                    .fillMaxWidth()
+                    .height(55.dp)) {
+                    Text(text = "Add Product" , color = Color.White, fontSize = 18.sp)
+                }
+            }
+        }
+    }
+
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GetNutritionInfo(navController: NavController, context: Context, viewModel: ClientViewModel) {
+
+    val nutritionState = viewModel.getNutritionState.collectAsState()
+    var user by mutableStateOf(User())
+
+    LaunchedEffect(key1 = "") {
+        user = viewModel.getLocalUser(context).first()
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Nutrition")
+            }
+
+        }) },
+        floatingActionButton = {
+            if (user.title == "Doctor") {
+                FloatingActionButton(onClick = {
+                    navController.navigate(NavScreen.AddNutrition.route)
+                }) {
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
+                }
+            }
+        }
+    ) {padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp), contentAlignment = Alignment.TopStart) {
+
+            LazyColumn() {
+                if (nutritionState.value.nutrition != null) {
+                    items(nutritionState.value.nutrition!!) { element ->
+                        Card(modifier = Modifier
+                            .fillMaxWidth()
+                            .height(70.dp)
+                            .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
+                            Row {
+                                AsyncImage(model = element?.image, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier
+                                    .width(150.dp)
+                                    .height(100.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Column {
+                                    Text(text = element?.name ?:"")
+                                    Spacer(modifier = Modifier.height(1.dp))
+                                    Text(text = "Quantity: ${element?.quantity}")
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AddExerciseInfo() {
+
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GetExerciseInfo(navController: NavController, viewModel: ClientViewModel) {
+
+    val nutritionState = viewModel.getNutritionState.collectAsState()
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Nutrition")
+            }
+
+        }) }
+    ) {padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp), contentAlignment = Alignment.TopStart) {
+
+            LazyColumn() {
+                if (nutritionState.value.nutrition != null) {
+                    items(nutritionState.value.nutrition!!) { element ->
+                        Card(modifier = Modifier
+                            .fillMaxWidth()
+                            .height(70.dp)
+                            .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
+                            Row {
+                                AsyncImage(model = element?.image, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier
+                                    .width(150.dp)
+                                    .height(100.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Column {
+                                    Text(text = element?.name ?:"")
+                                    Spacer(modifier = Modifier.height(1.dp))
+                                    Text(text = "Quantity: ${element?.quantity}")
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+}
 
 

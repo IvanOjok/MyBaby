@@ -4,9 +4,12 @@ import android.app.Activity
 import android.content.ContentValues
 import android.content.ContentValues.TAG
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.tasks.OnCompleteListener
+import com.google.android.gms.tasks.Task
 import com.google.firebase.FirebaseException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
@@ -19,8 +22,11 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.UploadTask
 import inc.pneuma.mybaby.data.model.CallInfo
 import inc.pneuma.mybaby.data.model.LocationInfo
+import inc.pneuma.mybaby.data.model.NutritionInfo
 import inc.pneuma.mybaby.data.model.User
 import inc.pneuma.mybaby.data.model.userDataStore
 import kotlinx.coroutines.delay
@@ -31,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class ClientViewModel : ViewModel() {
@@ -64,6 +71,12 @@ class ClientViewModel : ViewModel() {
     val _getCallState = MutableStateFlow(GetCallState())
     val getCallState = _getCallState.asStateFlow()
 
+    val _addNutritionState = MutableStateFlow(AddNutritionState())
+    val addNutritionState = _addNutritionState.asStateFlow()
+
+    val _getNutritionState = MutableStateFlow(GetNutritionState())
+    val getNutritionState = _getNutritionState.asStateFlow()
+
     fun startSplash(context: Context) {
         viewModelScope.launch {
             delay(3000)
@@ -87,6 +100,10 @@ class ClientViewModel : ViewModel() {
 
     fun initializeDatabase(): FirebaseDatabase {
         return FirebaseDatabase.getInstance()
+    }
+
+    fun initializeStorage(): FirebaseStorage {
+        return FirebaseStorage.getInstance()
     }
 
     fun login(phoneNumber: String, activity: Activity) {
@@ -497,6 +514,99 @@ class ClientViewModel : ViewModel() {
         }
     }
 
+    fun saveNutritionInformation(
+        context: Context,
+        image: Uri,
+        name: String,
+        quantity: String,
+        benefit: String) {
+
+        _addNutritionState.update {
+            it.copy(
+                isRunning = true
+            )
+        }
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+
+            val storageRef = initializeStorage().reference.child("nutrition/$image")
+            val uploadTask = storageRef.putFile(image)
+            uploadTask.continueWithTask { task->
+                storageRef.downloadUrl
+            }.addOnCompleteListener { task->
+                if (task.isSuccessful) {
+                    val imagePath = task.result.path ?: "None"
+
+                    val nutrition = NutritionInfo(
+                        image =  imagePath ,
+                        name =  name ,
+                        quantity =  quantity ,
+                        benefit =  benefit ,
+                        addedBy = user.phone,)
+                    db.child("nutrition").child(UUID.randomUUID().toString()).setValue(nutrition).addOnSuccessListener {
+                        _addNutritionState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = true
+                            )
+                        }
+                    }.addOnFailureListener {
+                        val message = it.message
+                        _addNutritionState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = false,
+                                error = message
+                            )
+                        }
+                    }
+                }
+            }
+
+
+        }
+
+    }
+
+
+    fun getNutritionInfo(context: Context,) {
+        viewModelScope.launch {
+            val list = ArrayList<NutritionInfo?>()
+            val db = initializeDatabase().reference
+            db.child("nutrition").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val nutritionInfo = i.getValue(NutritionInfo::class.java)
+                        list.add(nutritionInfo)
+                    }
+
+                    _getNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            nutrition = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
 }
 
 data class LoginState(
@@ -544,5 +654,12 @@ data class GetCallState(
 data class AddNutritionState(
     val isRunning: Boolean = false,
     val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+data class GetNutritionState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val nutrition: List<NutritionInfo?>?= null,
     val error: String? = null
 )
