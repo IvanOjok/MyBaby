@@ -18,6 +18,8 @@ sealed class NavScreen(var route:String) {
 
     object GetLocations: NavScreen("GetLocations")
 
+    object ViewLocations: NavScreen("ViewLocations")
+
     object AddNutrition: NavScreen("AddNutrition")
 
     object GetNutrition: NavScreen("GetNutrition")

@@ -428,6 +428,11 @@ class ClientViewModel : ViewModel() {
 
 
     fun getLocationInfo(context: Context,) {
+        _getLocationState.update {
+            it.copy(
+                isRunning = true,
+            )
+        }
         viewModelScope.launch {
             val list = ArrayList<LocationInfo?>()
             val user = getLocalUser(context).first()
@@ -499,6 +504,11 @@ class ClientViewModel : ViewModel() {
 
 
     fun getCallInfo(context: Context,) {
+        _getCallState.update {
+            it.copy(
+                isRunning = true,
+            )
+        }
         viewModelScope.launch {
             val list = ArrayList<CallInfo?>()
             val db = initializeDatabase().reference
@@ -520,7 +530,7 @@ class ClientViewModel : ViewModel() {
 
                 override fun onCancelled(error: DatabaseError) {
                     val message = error.message
-                    _getLocationState.update {
+                    _getCallState.update {
                         it.copy(
                             isRunning = false,
                             isComplete = false,
@@ -551,37 +561,69 @@ class ClientViewModel : ViewModel() {
             val user = getLocalUser(context).first()
             val db = initializeDatabase().reference
 
+            val uuid = UUID.randomUUID().toString()
+
             val storageRef = initializeStorage().reference.child("nutrition/$name")
             val uploadTask = storageRef.putFile(image)
             uploadTask.continueWithTask { task->
+                val url = storageRef.downloadUrl
+                val nutrition = NutritionInfo(
+                    image =  url.toString() ,
+                    name =  name ,
+                    quantity =  quantity ,
+                    benefit =  benefit ,
+                    addedBy = user.phone,)
+                db.child("nutrition").child(uuid).setValue(nutrition).addOnSuccessListener {
+                    _addNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true
+                        )
+                    }
+                }.addOnFailureListener {
+                    val message = it.message
+                    _addNutritionState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
                 storageRef.downloadUrl
+
             }.addOnCompleteListener { task->
                 if (task.isSuccessful) {
-                    val imagePath = task.result.path ?: "None"
+                    val imagePath = task.result
+                    //val imagePath = storageRef.downloadUrl.result
 
-                    val nutrition = NutritionInfo(
-                        image =  imagePath ,
-                        name =  name ,
-                        quantity =  quantity ,
-                        benefit =  benefit ,
-                        addedBy = user.phone,)
-                    db.child("nutrition").child(UUID.randomUUID().toString()).setValue(nutrition).addOnSuccessListener {
-                        _addNutritionState.update {
-                            it.copy(
-                                isRunning = false,
-                                isComplete = true
-                            )
-                        }
-                    }.addOnFailureListener {
-                        val message = it.message
-                        _addNutritionState.update {
-                            it.copy(
-                                isRunning = false,
-                                isComplete = false,
-                                error = message
-                            )
+                    if (imagePath != null) {
+                        val nutrition = NutritionInfo(
+                            image =  imagePath.toString() ,
+                            name =  name ,
+                            quantity =  quantity ,
+                            benefit =  benefit ,
+                            addedBy = user.phone,)
+                        db.child("nutrition").child(uuid).setValue(nutrition).addOnSuccessListener {
+                            _addNutritionState.update {
+                                it.copy(
+                                    isRunning = false,
+                                    isComplete = true
+                                )
+                            }
+                        }.addOnFailureListener {
+                            val message = it.message
+                            _addNutritionState.update {
+                                it.copy(
+                                    isRunning = false,
+                                    isComplete = false,
+                                    error = message
+                                )
+                            }
                         }
                     }
+
                 }
             }
 
@@ -592,13 +634,29 @@ class ClientViewModel : ViewModel() {
 
 
     fun getNutritionInfo(context: Context,) {
+
+        _getNutritionState.update {
+            it.copy(
+                isRunning = true,
+            )
+        }
+
         viewModelScope.launch {
             val list = ArrayList<NutritionInfo?>()
+
             val db = initializeDatabase().reference
             db.child("nutrition").addValueEventListener(object: ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     for (i in snapshot.children) {
                         val nutritionInfo = i.getValue(NutritionInfo::class.java)
+//                        val url = initializeStorage().getReferenceFromUrl(nutritionInfo?.image ?: "").downloadUrl.result.path
+//                        val info = NutritionInfo(
+//                            image = url ?: "",
+//                            name = nutritionInfo?.name ?: "",
+//                            quantity = nutritionInfo?.quantity ?: "",
+//                            benefit = nutritionInfo?.benefit ?: "",
+//                            addedBy = nutritionInfo?.addedBy ?: ""
+//                        )
                         list.add(nutritionInfo)
                     }
 
@@ -644,21 +702,48 @@ class ClientViewModel : ViewModel() {
         viewModelScope.launch {
             val user = getLocalUser(context).first()
             val db = initializeDatabase().reference
+            val uuid = UUID.randomUUID().toString()
 
             val storageRef = initializeStorage().reference.child("exercise/$name")
             val uploadTask = storageRef.putFile(image)
             uploadTask.continueWithTask { task->
-                storageRef.downloadUrl
-            }.addOnCompleteListener { task->
                 if (task.isSuccessful) {
-                    val imagePath = task.result.path ?: "None"
+                    val imagePath = storageRef.downloadUrl.toString()
 
                     val exercise = ExerciseInfo(
                         image =  imagePath ,
                         name =  name ,
                         description =  description ,
                         addedBy = user.phone,)
-                    db.child("exercise").child(UUID.randomUUID().toString()).setValue(exercise).addOnSuccessListener {
+                    db.child("exercise").child(uuid).setValue(exercise).addOnSuccessListener {
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = true
+                            )
+                        }
+                    }.addOnFailureListener {
+                        val message = it.message
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = false,
+                                error = message
+                            )
+                        }
+                    }
+                }
+                storageRef.downloadUrl
+            }.addOnCompleteListener { task->
+                if (task.isSuccessful) {
+                    val imagePath = task.result.toString()
+
+                    val exercise = ExerciseInfo(
+                        image =  imagePath ,
+                        name =  name ,
+                        description =  description ,
+                        addedBy = user.phone,)
+                    db.child("exercise").child(uuid).setValue(exercise).addOnSuccessListener {
                         _addExerciseState.update {
                             it.copy(
                                 isRunning = false,

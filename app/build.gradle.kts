@@ -118,6 +118,9 @@ dependencies {
 
     //maps
     implementation("com.google.maps.android:maps-compose:4.3.3")
+
+    //animation
+    implementation("androidx.compose.animation:animation:1.7.0-rc01")
 }
 
 protobuf {
