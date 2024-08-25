@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -161,11 +162,11 @@ fun MainScreen(activity: Activity, viewModel: ClientViewModel) {
         }
 
         composable(NavScreen.GetCalls.route) {
-            GetCallsScreen(navController, viewModel)
+            GetCallsScreen(navController, activity, viewModel)
         }
 
         composable(NavScreen.GetLocations.route) {
-            GetLocationScreen(navController, viewModel)
+            GetLocationScreen(navController, activity, viewModel)
         }
     }
 
@@ -869,7 +870,8 @@ fun UserMapActivity(navController: NavController, activity: Activity, viewModel:
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GetCallsScreen(navController: NavController, viewModel: ClientViewModel) {
+fun GetCallsScreen(navController: NavController, context: Context, viewModel: ClientViewModel) {
+    viewModel.getCallInfo(context)
     val callState = viewModel.getCallState.collectAsState()
 
     Scaffold(
@@ -892,24 +894,27 @@ fun GetCallsScreen(navController: NavController, viewModel: ClientViewModel) {
             .padding(10.dp), contentAlignment = Alignment.TopStart) {
 
             LazyColumn() {
-                items(callState.value.call) {element ->
-                    Card(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(70.dp)
-                        .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
-                        Row {
-                            Icon(imageVector = Icons.Rounded.PhoneCallback, contentDescription = null, modifier = Modifier
-                                .width(50.dp)
-                                .height(50.dp), tint = Color.Green)
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Column {
-                                Text(text = element)
-                                Spacer(modifier = Modifier.height(1.dp))
-                                Text(text = element)
+                if (callState.value.call != null) {
+                    items(callState.value.call!!) {element ->
+                        Card(modifier = Modifier
+                            .fillMaxWidth()
+                            .height(70.dp)
+                            .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
+                            Row {
+                                Icon(imageVector = Icons.Rounded.PhoneCallback, contentDescription = null, modifier = Modifier
+                                    .width(50.dp)
+                                    .height(50.dp), tint = Color.Green)
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Column {
+                                    Text(text = element?.phone ?: "")
+                                    Spacer(modifier = Modifier.height(1.dp))
+                                    Text(text = element?.time ?:"")
+                                }
                             }
                         }
                     }
                 }
+
                 }
             }
     }
@@ -919,7 +924,8 @@ fun GetCallsScreen(navController: NavController, viewModel: ClientViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GetLocationScreen(navController: NavController, viewModel: ClientViewModel) {
+fun GetLocationScreen(navController: NavController, context: Context, viewModel: ClientViewModel) {
+    viewModel.getLocationInfo(context)
     val locationState = viewModel.getLocationState.collectAsState()
 
     Scaffold(
@@ -942,24 +948,27 @@ fun GetLocationScreen(navController: NavController, viewModel: ClientViewModel) 
             .padding(10.dp), contentAlignment = Alignment.TopStart) {
 
             LazyColumn() {
-                items(locationState.value.location) {element ->
-                    Card(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(70.dp)
-                        .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
-                        Row {
-                            Icon(imageVector = Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier
-                                .width(50.dp)
-                                .height(50.dp), tint = Color.Blue)
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Column {
-                                Text(text = element)
-                                Spacer(modifier = Modifier.height(1.dp))
-                                Text(text = element)
+                if (locationState.value.location != null) {
+                    items(locationState.value.location!!) { element ->
+                        Card(modifier = Modifier
+                            .fillMaxWidth()
+                            .height(70.dp)
+                            .padding(5.dp), shape = RoundedCornerShape(20.dp)) {
+                            Row {
+                                Icon(imageVector = Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier
+                                    .width(50.dp)
+                                    .height(50.dp), tint = Color.Blue)
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Column {
+                                    Text(text = element?.phone ?:"")
+                                    Spacer(modifier = Modifier.height(1.dp))
+                                    Text(text = element?.time ?: "")
+                                }
                             }
                         }
                     }
                 }
+
             }
         }
     }
