@@ -79,6 +79,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
@@ -183,6 +184,14 @@ fun MainScreen(activity: Activity, viewModel: ClientViewModel) {
 
         composable(NavScreen.GetNutrition.route) {
             GetNutritionInfo(navController, activity, viewModel)
+        }
+
+        composable(NavScreen.AddExercise.route) {
+            AddExerciseInfo(navController, activity, viewModel)
+        }
+
+        composable(NavScreen.GetExercise.route) {
+            GetExerciseInfo(navController, activity, viewModel)
         }
     }
 
@@ -635,7 +644,7 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
                     }
                 }
                 Spacer(modifier = Modifier.width(5.dp))
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.GetExercise.route)  }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -738,7 +747,7 @@ fun DoctorHomeScreen(navController: NavController) {
                     }
                 }
                 Spacer(modifier = Modifier.width(5.dp))
-                Card(onClick = { /*TODO*/ }, modifier = Modifier
+                Card(onClick = { navController.navigate(NavScreen.GetExercise.route) }, modifier = Modifier
                     .weight(1F)
                     .padding(10.dp), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier
@@ -1131,6 +1140,7 @@ fun GetNutritionInfo(navController: NavController, context: Context, viewModel: 
 
     LaunchedEffect(key1 = "") {
         user = viewModel.getLocalUser(context).first()
+        viewModel.getNutritionInfo(context)
     }
 
     Scaffold(
@@ -1188,17 +1198,66 @@ fun GetNutritionInfo(navController: NavController, context: Context, viewModel: 
     }
 }
 
-
-@Composable
-fun AddExerciseInfo() {
-
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GetExerciseInfo(navController: NavController, viewModel: ClientViewModel) {
+fun AddExerciseInfo(navController: NavController, context: Context, viewModel: ClientViewModel) {
 
-    val nutritionState = viewModel.getNutritionState.collectAsState()
+    val addExerciseState by viewModel.addExerciseState.collectAsState()
+    val sheetState = rememberModalBottomSheetState()
+    var showBottomSheet by remember { mutableStateOf(false) }
+
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    //val image by rememberSaveable { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var description by rememberSaveable { mutableStateOf("") }
+
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        //contract = ActivityResultContracts.PickMultipleVisualMedia(),
+        onResult = { uri ->
+            uri.let {
+                imageUri = it
+            }
+        }
+    )
+
+    if (addExerciseState.isRunning) {
+        CircularProgressIndicator(modifier = Modifier
+            .width(70.dp)
+            .background(color = Color.Transparent), color = MaterialTheme.colorScheme.secondary)
+    } else if (addExerciseState.isComplete) {
+        navController.navigate(NavScreen.DoctorHome.route)
+    } else if (!addExerciseState.error.isNullOrEmpty()) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showBottomSheet = false
+            },
+            sheetState = sheetState
+        ) {
+            // Sheet content
+
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp, bottom = 50.dp, start = 10.dp, end = 10.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+
+                Icon(imageVector = Icons.Rounded.Error, contentDescription = null, tint = Color.Red, modifier = Modifier
+                    .width(70.dp)
+                    .height(70.dp)
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(text = addExerciseState.error?: "An error occurred")
+                Spacer(modifier = Modifier.height(5.dp))
+                Button(onClick = {
+                    showBottomSheet = false
+                    viewModel.saveExerciseInformation(context = context, name = name, image = imageUri!!, description = description)
+                }) {
+                    Text(text = "Retry", color = Color.White, fontSize = 18.sp)
+                }
+            }
+
+        }
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = {
@@ -1210,18 +1269,103 @@ fun GetExerciseInfo(navController: NavController, viewModel: ClientViewModel) {
                         navController.navigateUp()
                     } )
                 Spacer(modifier = Modifier.width(5.dp))
-                Text(text = "Nutrition")
+                Text(text = "Add Nutrition")
             }
 
         }) }
+    ) { padding ->
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp), contentAlignment = Alignment.TopStart) {
+            Column(modifier =  Modifier.fillMaxWidth()) {
+                //Image(imageVector = Icons.Rounded.AccountCircle, contentDescription = null, modifier = Modifier.height(150.dp))
+                AsyncImage(model = imageUri ?: Icons.Rounded.Add, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier
+                    .width(150.dp)
+                    .height(100.dp).clickable {
+                        galleryLauncher.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    }, alignment = Alignment.Center)
+//                Image(painter = painterResource(id = R.drawable.preg_logo), contentDescription = null, modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(150.dp)
+//                    )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = "Enter Name Of Exercise")
+                Spacer(modifier = Modifier.height(2.dp))
+                TextField(value = name, onValueChange = { name = it }, placeholder = { Text(text = "Enter Name Of Exercise") }, singleLine= true, shape= RoundedCornerShape(5.dp), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, keyboardType = KeyboardType.Text, imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(text = "Enter Description Of Exercise")
+                Spacer(modifier = Modifier.height(2.dp))
+                TextField(value = description, onValueChange = { description = it }, placeholder = { Text(text = "Enter Description Of Exercise") }, singleLine= true, shape= RoundedCornerShape(5.dp), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Text, imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(5.dp))
+
+                Spacer(modifier = Modifier.height(30.dp))
+                Button(onClick = {
+                    when {
+                        imageUri == null -> { Toast.makeText(context, "Exercise Image cannot be empty", Toast.LENGTH_SHORT).show()}
+                        name.isEmpty() -> { Toast.makeText(context, "Name Of Exercise cannot be empty", Toast.LENGTH_SHORT).show() }
+                        description.isEmpty() -> { Toast.makeText(context, "Product Quantity cannot be empty", Toast.LENGTH_SHORT).show() }
+                        else -> {
+                            viewModel.saveExerciseInformation(context = context, name = name, image = imageUri!!, description = description)
+                        }
+                    }
+                }, modifier = Modifier
+                    .fillMaxWidth()
+                    .height(55.dp)) {
+                    Text(text = "Add Exercise" , color = Color.White, fontSize = 18.sp)
+                }
+            }
+        }
+    }
+
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GetExerciseInfo(navController: NavController, context: Context, viewModel: ClientViewModel) {
+
+    val exerciseState = viewModel.getExerciseState.collectAsState()
+    var user by mutableStateOf(User())
+
+    LaunchedEffect(key1 = "") {
+        user = viewModel.getLocalUser(context).first()
+        viewModel.getExerciseInfo(context)
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier
+                    .width(50.dp)
+                    .height(50.dp)
+                    .clickable {
+                        navController.navigateUp()
+                    } )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "Exercises")
+            }
+
+        }) },
+        floatingActionButton = {
+            if (user.title == "Doctor") {
+                FloatingActionButton(onClick = {
+                    navController.navigate(NavScreen.AddExercise.route)
+                }) {
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
+                }
+            }
+        }
     ) {padding ->
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(10.dp), contentAlignment = Alignment.TopStart) {
 
             LazyColumn() {
-                if (nutritionState.value.nutrition != null) {
-                    items(nutritionState.value.nutrition!!) { element ->
+                if (exerciseState.value.exercise != null) {
+                    items(exerciseState.value.exercise!!) { element ->
                         Card(modifier = Modifier
                             .fillMaxWidth()
                             .height(70.dp)
@@ -1234,7 +1378,7 @@ fun GetExerciseInfo(navController: NavController, viewModel: ClientViewModel) {
                                 Column {
                                     Text(text = element?.name ?:"")
                                     Spacer(modifier = Modifier.height(1.dp))
-                                    Text(text = "Quantity: ${element?.quantity}")
+                                    Text(text = "Description: ${element?.description}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }
@@ -1245,5 +1389,6 @@ fun GetExerciseInfo(navController: NavController, viewModel: ClientViewModel) {
         }
     }
 }
+
 
 

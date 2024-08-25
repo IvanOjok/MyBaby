@@ -25,6 +25,7 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.UploadTask
 import inc.pneuma.mybaby.data.model.CallInfo
+import inc.pneuma.mybaby.data.model.ExerciseInfo
 import inc.pneuma.mybaby.data.model.LocationInfo
 import inc.pneuma.mybaby.data.model.NutritionInfo
 import inc.pneuma.mybaby.data.model.User
@@ -76,6 +77,12 @@ class ClientViewModel : ViewModel() {
 
     val _getNutritionState = MutableStateFlow(GetNutritionState())
     val getNutritionState = _getNutritionState.asStateFlow()
+
+    val _addExerciseState = MutableStateFlow(AddExerciseState())
+    val addExerciseState = _addExerciseState.asStateFlow()
+
+    val _getExerciseState = MutableStateFlow(GetExerciseState())
+    val getExerciseState = _getExerciseState.asStateFlow()
 
     fun startSplash(context: Context) {
         viewModelScope.launch {
@@ -204,7 +211,7 @@ class ClientViewModel : ViewModel() {
 
                     val user = task.result?.user
                     if (user != null) {
-                        getMember(phone) //user.phoneNumber?:""
+                        getMember(activity, phone) //user.phoneNumber?:""
                     } else {
                         _verifyState.update {
                             it.copy(
@@ -234,13 +241,19 @@ class ClientViewModel : ViewModel() {
             }
     }
 
-    fun getMember(userId: String) {
+    fun getMember(context: Context, userId: String) {
         val db = initializeDatabase().reference
         db.child("users").child(userId).addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.exists()) {
                     val user = snapshot.getValue(User::class.java)
-
+                    saveUserLocally(context = context, id = user?.id ?:"",
+                        name = user?.name ?:"" ,
+                        phone = user?.phone ?:"",
+                        dob = user?.dob ?:"",
+                        doc = user?.doc ?:"",
+                        doDelivery = user?.doDelivery ?:"",
+                        location = user?.location ?:"", title = user?.title ?:"")
                     _verifyState.update {
                         it.copy(
                             isRunning = false,
@@ -531,7 +544,7 @@ class ClientViewModel : ViewModel() {
             val user = getLocalUser(context).first()
             val db = initializeDatabase().reference
 
-            val storageRef = initializeStorage().reference.child("nutrition/$image")
+            val storageRef = initializeStorage().reference.child("nutrition/$name")
             val uploadTask = storageRef.putFile(image)
             uploadTask.continueWithTask { task->
                 storageRef.downloadUrl
@@ -607,6 +620,99 @@ class ClientViewModel : ViewModel() {
         }
     }
 
+
+    fun saveExerciseInformation(
+        context: Context,
+        image: Uri,
+        name: String,
+        description: String,
+        ) {
+
+        _addExerciseState.update {
+            it.copy(
+                isRunning = true
+            )
+        }
+
+        viewModelScope.launch {
+            val user = getLocalUser(context).first()
+            val db = initializeDatabase().reference
+
+            val storageRef = initializeStorage().reference.child("exercise/$name")
+            val uploadTask = storageRef.putFile(image)
+            uploadTask.continueWithTask { task->
+                storageRef.downloadUrl
+            }.addOnCompleteListener { task->
+                if (task.isSuccessful) {
+                    val imagePath = task.result.path ?: "None"
+
+                    val exercise = ExerciseInfo(
+                        image =  imagePath ,
+                        name =  name ,
+                        description =  description ,
+                        addedBy = user.phone,)
+                    db.child("exercise").child(UUID.randomUUID().toString()).setValue(exercise).addOnSuccessListener {
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = true
+                            )
+                        }
+                    }.addOnFailureListener {
+                        val message = it.message
+                        _addExerciseState.update {
+                            it.copy(
+                                isRunning = false,
+                                isComplete = false,
+                                error = message
+                            )
+                        }
+                    }
+                }
+            }
+
+
+        }
+
+    }
+
+
+    fun getExerciseInfo(context: Context,) {
+        viewModelScope.launch {
+            val list = ArrayList<ExerciseInfo?>()
+            val db = initializeDatabase().reference
+            db.child("exercise").addValueEventListener(object: ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (i in snapshot.children) {
+                        val exerciseInfo = i.getValue(ExerciseInfo::class.java)
+                        list.add(exerciseInfo)
+                    }
+
+                    _getExerciseState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            exercise = list.toList()
+                        )
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    val message = error.message
+                    _getExerciseState.update {
+                        it.copy(
+                            isRunning = false,
+                            isComplete = false,
+                            error = message
+                        )
+                    }
+                }
+
+            })
+
+        }
+    }
+
 }
 
 data class LoginState(
@@ -661,5 +767,18 @@ data class GetNutritionState(
     val isRunning: Boolean = false,
     val isComplete:Boolean = false,
     val nutrition: List<NutritionInfo?>?= null,
+    val error: String? = null
+)
+
+data class AddExerciseState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val error: String? = null
+)
+
+data class GetExerciseState(
+    val isRunning: Boolean = false,
+    val isComplete:Boolean = false,
+    val exercise: List<ExerciseInfo?>?= null,
     val error: String? = null
 )
