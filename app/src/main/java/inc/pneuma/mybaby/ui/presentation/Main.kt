@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.outlined.Output
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -50,6 +51,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DisplayMode
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -84,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.navigation.NavController
+import androidx.navigation.NavOptions
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -540,7 +544,7 @@ fun RegisterUserScreen(navController: NavController, activity: Activity, viewMod
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserHomeScreen(navController: NavController, context: Context, viewModel: ClientViewModel) {
-    //var localUser by remember { mutableStateOf(User) }
+    var menuState by remember { mutableStateOf(false) }
     val user = viewModel.getLocalUser(context).collectAsState(null).value
     val time = LocalDateTime.now().format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))
 
@@ -549,6 +553,23 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
         .fillMaxSize()
         .padding(20.dp), contentAlignment = Alignment.TopCenter)
     {
+        if (menuState) {
+            DropdownMenu(
+                expanded = menuState,
+                onDismissRequest = { menuState = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sign Out") },
+                    onClick = {
+                        viewModel.removeLocalUser(context)
+                        navController.navigate(NavScreen.Login.route, navOptions = NavOptions.Builder().setPopUpTo(NavScreen.Login.route, true,
+                            saveState = false
+                        ).build())
+                              },
+                    leadingIcon = { Icon(Icons.Outlined.Output, contentDescription = null) }
+                )
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.Start) {
             Row {
@@ -566,7 +587,9 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
                     .fillMaxWidth(), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
                     Icon(imageVector = Icons.Rounded.Settings, contentDescription = null, modifier = Modifier
                         .height(45.dp)
-                        .width(45.dp)
+                        .width(45.dp).clickable {
+                            menuState = true
+                        }
                     )
                 }
             }

@@ -375,6 +375,13 @@ class ClientViewModel : ViewModel() {
         }
     }
 
+    fun removeLocalUser(context: Context) {
+        viewModelScope.launch {
+            context.userDataStore.updateData {
+                it.toBuilder().clear().build()
+            }
+        }
+    }
 
     fun saveLocationInformation(
         context: Context,
