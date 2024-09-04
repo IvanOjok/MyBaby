@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Fastfood
 import androidx.compose.material.icons.rounded.FoodBank
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PhoneCallback
 import androidx.compose.material.icons.rounded.PhoneInTalk
@@ -94,6 +95,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.app.ActivityCompat
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavOptions
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -627,7 +629,7 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
 
                 Column(modifier = Modifier
                     .fillMaxWidth(), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
-                    Icon(imageVector = Icons.Rounded.Settings, contentDescription = null, modifier = Modifier
+                    Icon(imageVector = Icons.Rounded.Logout, contentDescription = null, modifier = Modifier
                         .height(45.dp)
                         .width(45.dp)
                         .pointerInput(true) {
@@ -640,15 +642,14 @@ fun UserHomeScreen(navController: NavController, context: Context, viewModel: Cl
                             //menuState = true
                             viewModel.removeLocalUser(context)
                             navController.navigate(
-                                NavScreen.Login.route,
-                                navOptions = NavOptions
-                                    .Builder()
-                                    .setPopUpTo(
-                                        NavScreen.Login.route, true,
-                                        saveState = false
-                                    )
-                                    .build()
-                            )
+                                NavScreen.Login.route
+                            ) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = true
+                                    saveState = false
+                                }
+                                launchSingleTop = true
+                            }
                         }
                     )
                 }
@@ -775,21 +776,20 @@ fun DoctorHomeScreen(navController: NavController, context: Context, viewModel: 
 
                 Column(modifier = Modifier
                     .fillMaxWidth(), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
-                    Icon(imageVector = Icons.Rounded.Settings, contentDescription = null, modifier = Modifier
+                    Icon(imageVector = Icons.Rounded.Logout, contentDescription = null, modifier = Modifier
                         .height(45.dp)
                         .width(45.dp)
                         .clickable {
                             viewModel.removeLocalUser(context)
                             navController.navigate(
                                 NavScreen.Login.route,
-                                navOptions = NavOptions
-                                    .Builder()
-                                    .setPopUpTo(
-                                        NavScreen.Login.route, true,
-                                        saveState = false
-                                    )
-                                    .build()
-                            )
+                            ) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = true
+                                    saveState = false
+                                }
+                                launchSingleTop = true
+                            }
                         }
                     )
                 }
